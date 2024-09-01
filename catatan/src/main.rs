@@ -1,7 +1,8 @@
 use chrono::Local;
+use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::fs::{self, create_dir};
+use std::fs::{self};
 use std::io::{self, Write};
 use std::path::PathBuf;
 use std::path::Path;
@@ -126,25 +127,33 @@ fn create_edit_file(root: &mut Folder) -> io::Result<String> {
     io::stdin().read_line(&mut file_name).expect("cannot read line");
     let file_name = file_name.trim().to_string();
 
+    //nama file yang fix penggabungan antara nama dari user dengan current time
+    let fix_name = format!("{}/{}", file_name,date);
+    
+    
     //menyimpan file sesuai penggunanya
     if root.find_file(&file_name).is_none() {
-        println!("creating  a new file with name : {}", file_name);
-        let mut file_content = String::new();
-
+        println!("creating  a new file with name : {}", fix_name);
+        let file_content = String::new();
+        
         let new_file = File {
-            name: file_name.clone(),
+            name: fix_name.clone(),
             content: file_content.clone(),
         };
-
+        
         root.add_file(new_file);
-
-        let file_path = format!("notes/{}", file_name);
-        let mut file = fs::File::create(&file_path)?;
+        
+        
+        //mendapatkan current path sekarang untuk lokasi penyimpanan file
+        //kenapa harus mendapatkan current path agar tidak terjadi kesalahan path saat menyimpan file 
+        let current_path = root.get_current_path();
+        let path_file = current_path.join(&fix_name);
+        let mut file = fs::File::create(&path_file)?;
         writeln!(file, "{}", file_content)?;
 
         //membuka file dengan teks editor yaitu notepad
         Command::new("Notepad")
-            .arg(&file_path)
+            .arg(&path_file)
             .status()
             .expect("failed to open file with editor");
 
@@ -155,7 +164,7 @@ fn create_edit_file(root: &mut Folder) -> io::Result<String> {
     }
 }
 
-fn create_folder(root: &mut Folder) -> io::Result<String> {
+fn create_folder(root: &Rc<RefCell<Folder>>) -> io::Result<String> {
     //cek apakah folder root sudah ada atau belum
     create_root_set_root()?;
 
@@ -164,13 +173,24 @@ fn create_folder(root: &mut Folder) -> io::Result<String> {
     io::stdin().read_line(&mut input).expect("cannot read line");
     let folder_name = input.trim().to_string();
 
-    if root.find_subfolder(&folder_name).is_none() {
-        let new_folder = Folder::new(folder_name.clone());
-        root.add_folder(new_folder);
+    //mendapatkan referensi mutable ke struct folder 
+    //karena kita menggunakan Rc<RefCell<T>> maka kita perlu memiliki akses mutable ke nilai yang dibungkus
+    //oleh Rc<RefCell<T>>
+    let mut root_ref = root.borrow_mut(); 
 
-        let folder_path = format!("notes/{}", folder_name);
+    if root_ref.find_subfolder(&folder_name).is_none() {
+        
+        //kita mendapatkan current path dan menggabungkan path sekarang dengan nama folder 
+        //agar menjadi path yang lenkap untuk menyimpan folder 
+        let folder_path = root_ref.get_current_path().join(&folder_name);
+        println!("creating folder at : {}", folder_path.display());
         fs::create_dir(folder_path)?;
 
+        let new_folder = Folder::new(folder_name.clone(), Some(Rc::clone(root)));
+        //folder_name di cloning karena kita tidak ingin mengambil kepemilikan dari variabel folder_name asli
+        //jika tidak di cloning maka akan pindah kepemilikan ke dalam struct folder dan sehabis itu tidak dapat digunakan lagi setelah itu 
+        //Some(Rc::clone(root)) untuk menetapkan "root" sebagai parent dari folder baru tanpa memindahkan ownershipp atau membuat salinan penuh dari root
+        root_ref.add_folder(new_folder);
         println!("Folder {} berhasil dibuat.", folder_name);
         Ok(folder_name)
     } else {
@@ -243,6 +263,7 @@ tekan 0 untuk kembali"
 }
 
 fn main() -> io::Result<()> {
+
     let mut root = Folder {
         name: "root".to_string(),
         files: Vec::new(),
