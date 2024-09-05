@@ -8,8 +8,9 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::rc::Rc;
 
+
 //struct untuk file txt nya
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct File {
     name: String,
     content: String,
@@ -77,38 +78,56 @@ impl Folder {
     //     }
     // }
 
-    fn find_subfolder_by_name(&self, name: &str) -> Option<Rc<RefCell<Folder>>> {
-       
-       //periksa folder folder pertama sebelum ke subfolder
-       if self.name == name {
-        return Some(Rc::clone(&self));
-       }
-
-       //jika di folder saat ini tidak cocok 
-       for subfolder in &self.subfolder  {
-        let subfolder_ref = subfolder.borrow();
-        if let Some(found) = subfolder_ref.find_subfolder_by_name(name){
-            return Some(found);
+    
+    fn find_subfolder_by_name(&self, target_name: &str) -> Option<Rc<RefCell<Folder>>> { 
+        // cek apakah nama folder sama 
+        if self.name == target_name {
+            return Some(Rc::new(RefCell::new(Folder{
+                name: self.name.clone(),
+                files: self.files.clone(),
+                subfolder: self.subfolder.clone(),
+                parent: self.parent.clone(),
+            })));
         }
-       }
-
-       //jika hasilnya tidak ditemukan 
-       None
+    
+        // melakukan pencarian setiap subfolder
+        for subfolder in &self.subfolder{
+            let subfolder_ref: &RefCell<Folder> = subfolder;
+            if let Some(found)  = subfolder_ref.borrow().find_subfolder_by_name(target_name){
+                return Some(found);
+            }
+        }
+    
+        // jika folder tidak ada/tidak ditemukan 
+        None
     }
 
+    //masih error
     fn find_file(&mut self, name: &str) -> Option<&mut File> {
         self.files.iter_mut().find(|file| file.name == name)
     }
 
     //fungsi untuk mendapatkan path sekarang
     fn get_current_path(&self) -> PathBuf {
-        let mut current_path = if let Some(parent) = &self.parent {
-            parent.borrow().get_current_path()
-        } else {
-            PathBuf::new()
-        };
+        let mut current_path = PathBuf::new();
 
+        //bikin path untuk folder saat ini 
         current_path.push(&self.name);
+
+        //melakukan traversing ke parent folder kalau ada 
+        let mut folder = self;
+        while let Some(parent) = &folder.parent {
+            //meminjam folder induk 
+            let parent_ref: Ref<Folder> = parent.borrow();
+
+            //menambahkan path folder induk ke path sekarang 
+            let parent_path = parent_ref.get_current_path();
+            current_path = parent_path.join(current_path);
+
+            //melanjutkan ke folder induk 
+            folder = &*parent_ref;
+        }
+
         current_path
     }
 }
@@ -186,26 +205,32 @@ fn create_folder(root: &Rc<RefCell<Folder>>) -> io::Result<String> {
     //karena kita menggunakan Rc<RefCell<T>> maka kita perlu memiliki akses mutable ke nilai yang dibungkus
     //oleh Rc<RefCell<T>>
     let mut root_ref = root.borrow_mut();
+    
+    if root_ref
+        .borrow()
+        .find_subfolder_by_name(&folder_name)
+        .is_none()
+    {
+        //membuat folder di system
+        let folder_path = root_ref.borrow().get_current_path().join(&folder_name);
+        println!("creating folder at {}", folder_path.display());
+        fs::create_dir(folder_path)?;
 
-    if root_ref.find_subfolder_by_name(&folder_name).is_none() {
-        if self.name == name{
-            return Some(Rc::clone(&self));
-        //folder_name di cloning karena kita tidak ingin mengambil kepemilikan dari variabel folder_name asli
-        //jika tidak di cloning maka akan pindah kepemilikan ke dalam struct folder dan sehabis itu tidak dapat digunakan lagi setelah itu
-        //Some(Rc::clone(root)) untuk menetapkan "root" sebagai parent dari folder baru tanpa memindahkan ownershipp atau membuat salinan penuh dari root
+        //membuat folder di dalam struktur data
+        let new_folder = Folder::new(folder_name.clone(), Some(Rc::clone(root)));
         root_ref.add_folder(new_folder);
-        println!("Folder {} berhasil dibuat.", folder_name);
+        println!("folder {} berhasil dibuat.", folder_name);
         Ok(folder_name)
-        } else {
-            println!("folder dengan nama {} sudah ada tol", folder_name);
-            Err(io::Error::new(
-                io::ErrorKind::AlreadyExists,
-                "folder already exist",
-            ))
-        }
+    } else {
+        println!("folder dengan nama {} sudah ada njing.", folder_name);
+        Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            "folder already ada blog",
+        ))
     }
 }
 
+//masih error 
 fn list_root(root: &Folder) -> io::Result<()> {
     //membuat vector untuk menyimpan isi dari folder root
     let mut content = Vec::new();
@@ -271,7 +296,7 @@ fn main() -> io::Result<()> {
         name: "root".to_string(),
         files: Vec::new(),
         subfolder: Vec::new(),
-        parent,
+        parent : None,
     };
 
     println!("Program Catatan");
