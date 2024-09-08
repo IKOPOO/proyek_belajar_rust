@@ -4,7 +4,6 @@ use std::cell::{Ref, RefCell};
 use std::fs::{self};
 use std::io::{self, Write};
 use std::path::Path;
-use std::path::PathBuf;
 use std::process::Command;
 use std::rc::Rc;
 
@@ -107,29 +106,35 @@ impl Folder {
         self.files.iter_mut().find(|file| file.name == name)
     }
 
-    //fungsi untuk mendapatkan path sekarang
-    fn get_current_path(&self) -> PathBuf {
-        let mut current_path = PathBuf::new();
+    // fungsi untuk mendapatkan path sekarang
+    fn get_current_path(&self) -> String {
+        let mut path = vec![self.name.clone()]; // Awali dengan nama folder saat ini
+        
+        // Mulai dari folder saat ini, terus naik ke parent hingga mencapai root
+        let mut current_folder = self.parent.clone();
+        
+        while let Some(ref parent_folder_rc) = current_folder {
+            // Ambil referensi ke parent menggunakan borrow
+            let parent_folder: &RefCell<Folder>  = parent_folder_rc.borrow();
+            // Tambahkan nama folder parent ke path
+            path.push(parent_folder.borrow().name.clone());
+            // Lanjutkan ke parent berikutnya
+            let next_folder = parent_folder.borrow().parent.clone();
 
-        //bikin path untuk folder saat ini 
-        current_path.push(&self.name);
-
-        //melakukan traversing ke parent folder kalau ada 
-        let mut folder = self;
-        while let Some(parent) = &folder.parent {
-            //meminjam folder induk 
-            let parent_ref: Ref<Folder> = parent.borrow();
-
-            //menambahkan path folder induk ke path sekarang 
-            let parent_path = parent_ref.get_current_path();
-            current_path = parent_path.join(current_path);
-
-            //melanjutkan ke folder induk 
-            folder = &*parent_ref;
+            current_folder = next_folder;
+            // current_folder = parent_folder.borrow().parent.clone();
         }
-
-        current_path
+        
+        // Path akan terisi dari leaf ke root, kita perlu membaliknya
+        path.reverse();
+        
+        // Gabungkan semua nama folder dengan separator "/"
+        path.join("/")
     }
+    
+
+    
+
 }
 
 //untuk memastikan root sudah ada dan mengubah ke path direktori tersebut
@@ -332,7 +337,7 @@ fn main() -> io::Result<()> {
                             "folder baru" => {
                                 let new_folder_root = create_folder(&mut root)?;
 
-                                if let Some(new_folder) = root.find_subfolder(&new_folder_root) {
+                                if let Some(new_folder) = root.find_subfolder_by_name(&new_folder_root) {
                                     loop {
                                         println!("anda berada di folder {}", new_folder_root);
                                         println!("pilih aksi : ");
