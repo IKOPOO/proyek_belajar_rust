@@ -1,12 +1,11 @@
 use chrono::Local;
 use std::borrow::Borrow;
-use std::cell::{Ref, RefCell};
+use std::cell::RefCell;
 use std::fs::{self};
 use std::io::{self, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::rc::Rc;
-
 
 //struct untuk file txt nya
 #[derive(Debug, Clone)]
@@ -77,27 +76,26 @@ impl Folder {
     //     }
     // }
 
-    
-    fn find_subfolder_by_name(&self, target_name: &str) -> Option<Rc<RefCell<Folder>>> { 
-        // cek apakah nama folder sama 
+    fn find_subfolder_by_name(&self, target_name: &str) -> Option<Rc<RefCell<Folder>>> {
+        // cek apakah nama folder sama
         if self.name == target_name {
-            return Some(Rc::new(RefCell::new(Folder{
+            return Some(Rc::new(RefCell::new(Folder {
                 name: self.name.clone(),
                 files: self.files.clone(),
                 subfolder: self.subfolder.clone(),
                 parent: self.parent.clone(),
             })));
         }
-    
+
         // melakukan pencarian setiap subfolder
-        for subfolder in &self.subfolder{
+        for subfolder in &self.subfolder {
             let subfolder_ref: &RefCell<Folder> = subfolder;
-            if let Some(found)  = subfolder_ref.borrow().find_subfolder_by_name(target_name){
+            if let Some(found) = subfolder_ref.borrow().find_subfolder_by_name(target_name) {
                 return Some(found);
             }
         }
-    
-        // jika folder tidak ada/tidak ditemukan 
+
+        // jika folder tidak ada/tidak ditemukan
         None
     }
 
@@ -109,13 +107,13 @@ impl Folder {
     // fungsi untuk mendapatkan path sekarang
     fn get_current_path(&self) -> String {
         let mut path = vec![self.name.clone()]; // Awali dengan nama folder saat ini
-        
+
         // Mulai dari folder saat ini, terus naik ke parent hingga mencapai root
         let mut current_folder = self.parent.clone();
-        
+
         while let Some(ref parent_folder_rc) = current_folder {
             // Ambil referensi ke parent menggunakan borrow
-            let parent_folder: &RefCell<Folder>  = parent_folder_rc.borrow();
+            let parent_folder: &RefCell<Folder> = parent_folder_rc.borrow();
             // Tambahkan nama folder parent ke path
             path.push(parent_folder.borrow().name.clone());
             // Lanjutkan ke parent berikutnya
@@ -123,18 +121,17 @@ impl Folder {
 
             current_folder = next_folder;
             // current_folder = parent_folder.borrow().parent.clone();
+            
         }
-        
+
         // Path akan terisi dari leaf ke root, kita perlu membaliknya
         path.reverse();
-        
+
         // Gabungkan semua nama folder dengan separator "/"
         path.join("/")
     }
-    
 
     
-
 }
 
 //untuk memastikan root sudah ada dan mengubah ke path direktori tersebut
@@ -156,7 +153,7 @@ fn create_edit_file(root: &mut Folder) -> io::Result<String> {
 
     //membuat nama dan path file sesuai timestap
     let mut file_name = String::new();
-    println!("masukkan nama file yang diingin kan : ");
+    println!("masukkan nama file yang diinginkan : ");
     io::stdin()
         .read_line(&mut file_name)
         .expect("cannot read line");
@@ -180,13 +177,15 @@ fn create_edit_file(root: &mut Folder) -> io::Result<String> {
         //mendapatkan current path sekarang untuk lokasi penyimpanan file
         //kenapa harus mendapatkan current path agar tidak terjadi kesalahan path saat menyimpan file
         let current_path = root.get_current_path();
-        let path_file = current_path.join(&fix_name);
-        let mut file = fs::File::create(&path_file)?;
+        let mut path_buf = PathBuf::from(current_path);
+        path_buf.push(&fix_name);
+        // let path_file = current_path.join(&fix_name);
+        let mut file = fs::File::create(&path_buf)?;
         writeln!(file, "{}", file_content)?;
 
         //membuka file dengan teks editor yaitu notepad
         Command::new("Notepad")
-            .arg(&path_file)
+            .arg(&path_buf)
             .status()
             .expect("failed to open file with editor");
 
@@ -210,16 +209,19 @@ fn create_folder(root: &Rc<RefCell<Folder>>) -> io::Result<String> {
     //karena kita menggunakan Rc<RefCell<T>> maka kita perlu memiliki akses mutable ke nilai yang dibungkus
     //oleh Rc<RefCell<T>>
     let mut root_ref = root.borrow_mut();
-    
+
     if root_ref
         .borrow()
         .find_subfolder_by_name(&folder_name)
         .is_none()
     {
         //membuat folder di system
-        let folder_path = root_ref.borrow().get_current_path().join(&folder_name);
-        println!("creating folder at {}", folder_path.display());
-        fs::create_dir(folder_path)?;
+        // let folder_path = root_ref.borrow().get_current_path().join(&folder_name);
+        let folder_path = root_ref.borrow().get_current_path();
+        let mut path_buf = PathBuf::from(folder_path);
+        path_buf.push(&folder_name);
+        println!("creating folder at {}", path_buf.display());
+        fs::create_dir(&path_buf)?;
 
         //membuat folder di dalam struktur data
         let new_folder = Folder::new(folder_name.clone(), Some(Rc::clone(root)));
@@ -235,73 +237,73 @@ fn create_folder(root: &Rc<RefCell<Folder>>) -> io::Result<String> {
     }
 }
 
-//masih error 
-fn list_root(root: &Folder) -> io::Result<()> {
-    //membuat vector untuk menyimpan isi dari folder root
-    let mut content = Vec::new();
+//masih error
+// fn list_root(root: &Folder) -> io::Result<()> {
+//     //membuat vector untuk menyimpan isi dari folder root
+//     let mut content = Vec::new();
 
-    //melakukan loop untuk memasukkan ke dalam vector yang sudah di buat tadi
-    for folder in &root.subfolder {
-        content.push(format!("[Folder] {}", folder.name));
-    }
+//     //melakukan loop untuk memasukkan ke dalam vector yang sudah di buat tadi
+//     for folder in &root.subfolder {
+//         content.push(format!("[Folder] {}", folder.name));
+//     }
 
-    for file in &root.files {
-        content.push(format!("[file] {}", file.name));
-    }
+//     for file in &root.files {
+//         content.push(format!("[file] {}", file.name));
+//     }
 
-    if content.is_empty() {
-        println!("belum ada file atau folder yang dibuat ");
-        return Ok(());
-    }
+//     if content.is_empty() {
+//         println!("belum ada file atau folder yang dibuat ");
+//         return Ok(());
+//     }
 
-    println!("Daftar isi root : ");
-    for (index, contents) in content.iter().enumerate() {
-        println!("{}, {}", index + 1, contents);
-    }
+//     println!("Daftar isi root : ");
+//     for (index, contents) in content.iter().enumerate() {
+//         println!("{}, {}", index + 1, contents);
+//     }
 
-    println!(
-        "Pilih nomor yang ingin akses
-tekan 0 untuk kembali"
-    );
+//     println!(
+//         "Pilih nomor yang ingin akses
+// tekan 0 untuk kembali"
+//     );
 
-    let mut input = String::new();
-    io::stdin().read_line(&mut input).expect("cannot read line");
-    let pilihan = input.trim().parse::<usize>().unwrap_or(0);
+//     let mut input = String::new();
+//     io::stdin().read_line(&mut input).expect("cannot read line");
+//     let pilihan = input.trim().parse::<usize>().unwrap_or(0);
 
-    if pilihan == 0 {
-        println!("kembali ke menu utama");
-        return Ok(());
-    } else if pilihan > 0 && pilihan <= content.len() {
-        let selected = &content[pilihan - 1];
-        if selected.starts_with("[Folder]") {
-            let folder_name = selected.trim_start_matches("[Folder]").to_string();
-            if let Some(selected_folder) = root.subfolder.iter().find(|f| f.name == folder_name) {
-                // menampilkan isi folder jika folder dipilih
-                // list_root_contents(selected_folder)?;
-                list_root(selected_folder)?;
-            }
-        } else if selected.starts_with("[File]") {
-            let file_name = selected.trim_start_matches("[File]").to_string();
-            if let Some(selected_file) = root.files.iter().find(|f| f.name == file_name) {
-                println!("membuka file {}", selected_file.name);
+//     if pilihan == 0 {
+//         println!("kembali ke menu utama");
+//         return Ok(());
+//     } else if pilihan > 0 && pilihan <= content.len() {
+//         let selected = &content[pilihan - 1];
+//         if selected.starts_with("[Folder]") {
+//             let folder_name = selected.trim_start_matches("[Folder]").to_string();
+//             if let Some(selected_folder) = root.subfolder.iter().find(|f| f.name == folder_name) {
+//                 // menampilkan isi folder jika folder dipilih
+//                 // list_root_contents(selected_folder)?;
+//                 list_root(selected_folder)?;
+//             }
+//         } else if selected.starts_with("[File]") {
+//             let file_name = selected.trim_start_matches("[File]").to_string();
+//             if let Some(selected_file) = root.files.iter().find(|f| f.name == file_name) {
+//                 println!("membuka file {}", selected_file.name);
 
-                Command::new("Notepad")
-                    .arg(&selected_file.name)
-                    .status()
-                    .expect("cannot open the file with notepad");
-            }
-        }
-    }
+//                 Command::new("Notepad")
+//                     .arg(&selected_file.name)
+//                     .status()
+//                     .expect("cannot open the file with notepad");
+//             }
+//         }
+//     }
 
-    Ok(())
-}
+//     Ok(())
+// }
 
 fn main() -> io::Result<()> {
     let mut root = Folder {
         name: "root".to_string(),
         files: Vec::new(),
         subfolder: Vec::new(),
-        parent : None,
+        parent: None,
     };
 
     println!("Program Catatan");
@@ -337,7 +339,9 @@ fn main() -> io::Result<()> {
                             "folder baru" => {
                                 let new_folder_root = create_folder(&mut root)?;
 
-                                if let Some(new_folder) = root.find_subfolder_by_name(&new_folder_root) {
+                                if let Some(new_folder) =
+                                    root.find_subfolder_by_name(&new_folder_root)
+                                {
                                     loop {
                                         println!("anda berada di folder {}", new_folder_root);
                                         println!("pilih aksi : ");
