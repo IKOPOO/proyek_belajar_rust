@@ -178,8 +178,7 @@ fn create_edit_file(root: &mut Folder) -> io::Result<String> {
         //kenapa harus mendapatkan current path agar tidak terjadi kesalahan path saat menyimpan file
         let current_path = root.get_current_path();
         let mut path_buf = PathBuf::from(current_path);
-        path_buf.push(&fix_name);
-        // let path_file = current_path.join(&fix_name);
+        path_buf.push(&fix_name);        
         let mut file = fs::File::create(&path_buf)?;
         writeln!(file, "{}", file_content)?;
 
@@ -299,12 +298,13 @@ fn create_folder(root: &Rc<RefCell<Folder>>) -> io::Result<String> {
 // }
 
 fn main() -> io::Result<()> {
-    let mut root = Folder {
-        name: "root".to_string(),
+
+    let root = Rc::new(RefCell::new(Folder{
+        name: "roor".to_string(),
         files: Vec::new(),
         subfolder: Vec::new(),
         parent: None,
-    };
+    }));
 
     println!("Program Catatan");
     garis();
@@ -337,10 +337,10 @@ fn main() -> io::Result<()> {
 
                         match input {
                             "folder baru" => {
-                                let new_folder_root = create_folder(&mut root)?;
-
-                                if let Some(new_folder) =
-                                    root.find_subfolder_by_name(&new_folder_root)
+                                let new_folder_root = create_folder(&root)?;
+                                let borrowed_root: std::cell::RefMut<Folder> = root.borrow_mut();
+                                if let Some(new_folder) =                                    
+                                    borrowed_root.find_subfolder_by_name(&new_folder_root)
                                 {
                                     loop {
                                         println!("anda berada di folder {}", new_folder_root);
@@ -359,11 +359,11 @@ fn main() -> io::Result<()> {
                                         match input {
                                             "1" => {
                                                 //menambah file ke dalam folder
-                                                create_edit_file(new_folder)?;
+                                                create_edit_file(&mut new_folder.borrow_mut())?;
                                             }
 
                                             "2" => {
-                                                create_folder(new_folder)?;
+                                                create_folder(&new_folder)?;
                                             }
 
                                             "3" => {
