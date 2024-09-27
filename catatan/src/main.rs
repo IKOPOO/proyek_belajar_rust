@@ -7,21 +7,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::rc::Rc;
 
-//struct untuk file txt nya
-#[derive(Debug, Clone)]
-struct File {
-    name: String,
-    content: String,
-}
 
-//struct untuk folder
-#[derive(Debug)]
-struct Folder {
-    name: String,
-    files: Vec<File>,
-    subfolder: Vec<Rc<RefCell<Folder>>>,
-    parent: Option<Rc<RefCell<Folder>>>,
-}
 
 fn garis() {
     let mut a = 0;
@@ -40,6 +26,24 @@ fn single() {
     }
     println!("");
 }
+
+//struct untuk file txt nya
+#[derive(Debug, Clone)]
+struct File {
+    name: String,
+    content: String,
+}
+
+//struct untuk folder
+#[derive(Debug)]
+struct Folder {
+    name: String,
+    files: Vec<File>,
+    subfolder: Vec<Rc<RefCell<Folder>>>,
+    parent: Option<Rc<RefCell<Folder>>>,
+}
+
+
 
 impl Folder {
     //construktor folder
@@ -62,19 +66,6 @@ impl Folder {
         self.subfolder.push(folder);
     }
 
-    //fungsi untuk menampilkan semua content yang ada
-    // fn _list_conten(&self) {
-    //     println!("Folder: {}", self.name);
-    //     println!("Files : ");
-    //     for file in &self.files {
-    //         println!(" - {}", file.name);
-    //     }
-
-    //     println!("Subfolder : ");
-    //     for folder in &self.subfolder {
-    //         println!(" - {}", folder.name);
-    //     }
-    // }
 
     fn find_subfolder_by_name(&self, target_name: &str) -> Option<Rc<RefCell<Folder>>> {
         // cek apakah nama folder sama
@@ -105,33 +96,52 @@ impl Folder {
     }
 
     // fungsi untuk mendapatkan path sekarang
-    fn get_current_path(&self) -> String {
-        let mut path = vec![self.name.clone()]; // Awali dengan nama folder saat ini
+    // fn get_current_path(&self) -> String {
+    //     let mut path = vec![self.name.clone()]; // Awali dengan nama folder saat ini
 
-        // Mulai dari folder saat ini, terus naik ke parent hingga mencapai root
-        let mut current_folder = self.parent.clone();
+    //     // Mulai dari folder saat ini, terus naik ke parent hingga mencapai root
+    //     let mut current_folder = self.parent.clone();
 
-        while let Some(ref parent_folder_rc) = current_folder {
-            // Ambil referensi ke parent menggunakan borrow
-            let parent_folder: &RefCell<Folder> = parent_folder_rc.borrow();
-            // Tambahkan nama folder parent ke path
-            path.push(parent_folder.borrow().name.clone());
-            // Lanjutkan ke parent berikutnya
-            let next_folder = parent_folder.borrow().parent.clone();
+    //     while let Some(ref parent_folder_rc) = current_folder {
+    //         // Ambil referensi ke parent menggunakan borrow
+    //         let parent_folder: &RefCell<Folder> = parent_folder_rc.borrow();
+    //         // Tambahkan nama folder parent ke path
+    //         path.push(parent_folder.borrow().name.clone());
+    //         // Lanjutkan ke parent berikutnya
+    //         let next_folder = parent_folder.borrow().parent.clone();
 
-            current_folder = next_folder;
-            // current_folder = parent_folder.borrow().parent.clone();
+    //         current_folder = next_folder;
+    //         // current_folder = parent_folder.borrow().parent.clone();
             
+    //     }
+
+    //     // Path akan terisi dari leaf ke root, kita perlu membaliknya
+    //     path.reverse();
+
+    //     // Gabungkan semua nama folder dengan separator "/"
+    //     path.join("/")
+    // }
+
+    fn get_file_path(&self, file_name: &str) -> Option<String> {
+        if let Some(file) = self.find_file(file_name) {
+            return Some(format!("{}/{}", self.get_current_path(), file_name));
         }
 
-        // Path akan terisi dari leaf ke root, kita perlu membaliknya
-        path.reverse();
+        // Jika file tidak ada di folder ini, cek subfolder
+        for subfolder in &self.subfolder {
+            let subfolder_ref: &RefCell<Folder> = subfolder;
+            if let Some(path) = subfolder_ref.borrow().get_file_path(file_name) {
+                return Some(path);
+            }
+        }
 
-        // Gabungkan semua nama folder dengan separator "/"
-        path.join("/")
+        // Jika file tidak ditemukan
+        None
     }
 
     
+
+
 }
 
 //untuk memastikan root sudah ada dan mengubah ke path direktori tersebut
@@ -300,7 +310,7 @@ fn create_folder(root: &Rc<RefCell<Folder>>) -> io::Result<String> {
 fn main() -> io::Result<()> {
 
     let root = Rc::new(RefCell::new(Folder{
-        name: "roor".to_string(),
+        name: "root".to_string(),
         files: Vec::new(),
         subfolder: Vec::new(),
         parent: None,
